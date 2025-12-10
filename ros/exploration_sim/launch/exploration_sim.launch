@@ -1,0 +1,19 @@
+<launch>
+    <!-- 参数 -->
+    <arg name="pcd_file" default="$(find exploration_sim)/../../zzxl3.pcd"/>
+    <arg name="max_iterations" default="100"/>
+    <arg name="resolution" default="0.1"/>
+    <arg name="sim_rate" default="2.0"/>
+
+    <!-- 仿真节点 -->
+    <node pkg="exploration_sim" type="sim_node" name="exploration_sim" output="screen">
+        <param name="pcd_file" value="$(arg pcd_file)"/>
+        <param name="max_iterations" value="$(arg max_iterations)"/>
+        <param name="resolution" value="$(arg resolution)"/>
+        <param name="sim_rate" value="$(arg sim_rate)"/>
+    </node>
+
+    <!-- RViz -->
+    <node pkg="rviz" type="rviz" name="rviz"
+          args="-d $(find exploration_sim)/rviz/exploration.rviz"/>
+</launch>

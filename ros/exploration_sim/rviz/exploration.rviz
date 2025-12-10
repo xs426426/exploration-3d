@@ -1,0 +1,156 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+
+    - Class: rviz/TF
+      Enabled: true
+      Name: TF
+      Marker Scale: 0.5
+
+    - Alpha: 1
+      Class: rviz/Axes
+      Enabled: true
+      Length: 1
+      Name: World Axes
+      Radius: 0.05
+      Reference Frame: world
+
+    # 无人机位姿
+    - Alpha: 1
+      Axes Length: 0.3
+      Axes Radius: 0.05
+      Class: rviz/Pose
+      Color: 0; 255; 0
+      Enabled: true
+      Head Length: 0.15
+      Head Radius: 0.1
+      Name: Drone Pose
+      Shaft Length: 0.3
+      Shaft Radius: 0.05
+      Shape: Arrow
+      Topic: /drone/pose
+
+    # 无人机 Marker
+    - Class: rviz/Marker
+      Enabled: true
+      Name: Drone Marker
+      Topic: /drone/marker
+
+    # 飞行轨迹
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 0; 255; 0
+      Enabled: true
+      Head Diameter: 0.1
+      Head Length: 0.1
+      Length: 0.3
+      Line Style: Billboards
+      Line Width: 0.05
+      Name: Trajectory
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Style: None
+      Radius: 0.03
+      Shaft Diameter: 0.05
+      Shaft Length: 0.1
+      Topic: /drone/trajectory
+
+    # 当前规划路径
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 255; 255; 0
+      Enabled: true
+      Line Style: Billboards
+      Line Width: 0.03
+      Name: Current Path
+      Topic: /drone/current_path
+
+    # OctoMap
+    - Class: octomap_rviz_plugin/OccupancyGrid
+      Enabled: true
+      Name: OctoMap
+      Topic: /octomap
+      Voxel Alpha: 0.8
+      Voxel Coloring: Z-Axis
+      Voxel Rendering: Occupied Voxels
+
+    # 前沿点
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Name: Frontiers
+      Topic: /frontiers
+
+    # 可见点云
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: true
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Enabled: true
+      Name: Visible Cloud
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Size (m): 0.02
+      Style: Points
+      Topic: /visible_cloud
+
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+
+  Name: root
+
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 15
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 1
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.5
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
+      Yaw: 0.8
