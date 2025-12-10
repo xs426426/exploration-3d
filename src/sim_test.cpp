@@ -24,6 +24,7 @@ int main(int argc, char* argv[]) {
     std::string pcdFile = "zzxl3.pcd";
     int maxIterations = 50;
     double simDt = 0.1;  // 仿真步长 (秒)
+    double resolution = 0.1;  // OctoMap 分辨率
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -31,10 +32,13 @@ int main(int argc, char* argv[]) {
             pcdFile = argv[++i];
         } else if ((arg == "-n" || arg == "--iterations") && i + 1 < argc) {
             maxIterations = std::stoi(argv[++i]);
+        } else if ((arg == "-r" || arg == "--resolution") && i + 1 < argc) {
+            resolution = std::stod(argv[++i]);
         } else if (arg == "-h" || arg == "--help") {
             std::cout << "用法: " << argv[0] << " [选项]\n"
                       << "  -p, --pcd <file>       PCD 文件路径 (默认: zzxl3.pcd)\n"
                       << "  -n, --iterations <N>   最大迭代次数 (默认: 50)\n"
+                      << "  -r, --resolution <m>   OctoMap 分辨率 (默认: 0.1)\n"
                       << "  -h, --help             显示帮助\n";
             return 0;
         }
@@ -81,18 +85,19 @@ int main(int argc, char* argv[]) {
     // ========== 2. 初始化 OctoMap ==========
     printSeparator("2. 初始化 OctoMap");
 
-    ExplorationConfig config;
-    config.resolution = 0.1;
-    config.maxRange = sensorCfg.maxRange;
-    config.minZ = minBound.z;
-    config.maxZ = maxBound.z + 1.0;
-
-    OctoMapManager octomap(config);
-    std::cout << "[OctoMap] 分辨率: " << config.resolution << "m" << std::endl;
+    OctoMapManager octomap(resolution);
+    std::cout << "[OctoMap] 分辨率: " << resolution << "m" << std::endl;
 
     // ========== 3. 初始化前沿点检测器和路径规划器 ==========
-    FrontierDetector frontierDetector(config, octomap);
-    PathPlanner pathPlanner(config, octomap);
+    ExplorationConfig config;
+    config.resolution = resolution;
+    config.minFrontierSize = 5;
+    config.frontierClusterRadius = 0.5;
+    config.astarMaxIterations = 50000;
+    config.safetyMargin = 0.2;
+
+    FrontierDetector frontierDetector(config);
+    PathPlanner pathPlanner(config);
 
     // ========== 4. 开始仿真循环 ==========
     printSeparator("3. 开始探索仿真");
@@ -126,19 +131,16 @@ int main(int argc, char* argv[]) {
         }
 
         // 更新 OctoMap
-        Pose dronePose;
-        dronePose.position = currentPos;
-        dronePose.yaw = currentYaw;
-        octomap.insertPointCloud(visibleCloud, dronePose);
+        octomap.insertPointCloud(visibleCloud, currentPos);
 
         // 打印地图统计
-        size_t occupied, free, unknown;
-        octomap.getMapStats(occupied, free, unknown);
-        std::cout << "地图状态 - 占用: " << occupied
-                  << ", 空闲: " << free << std::endl;
+        auto stats = octomap.getStats();
+        std::cout << "地图状态 - 占用: " << stats.occupiedNodes
+                  << ", 空闲: " << stats.freeNodes
+                  << ", 总节点: " << stats.totalNodes << std::endl;
 
         // 检测前沿点
-        auto frontiers = frontierDetector.detectFrontiers(dronePose);
+        auto frontiers = frontierDetector.detectFrontiers(octomap, currentPos);
         std::cout << "检测到 " << frontiers.size() << " 个前沿点簇" << std::endl;
 
         if (frontiers.empty()) {
@@ -146,18 +148,19 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        // 选择最佳前沿点
-        const auto& bestFrontier = frontiers[0];  // 已按分数排序
+        // 选择最佳前沿点 (frontiers 已按分数排序)
+        const auto& bestFrontier = frontiers[0];
         std::cout << "选择目标: (" << bestFrontier.centroid.x << ", "
                   << bestFrontier.centroid.y << ", " << bestFrontier.centroid.z
-                  << ") 分数=" << bestFrontier.score << std::endl;
+                  << ") 分数=" << bestFrontier.score
+                  << " 大小=" << bestFrontier.cells.size() << std::endl;
 
         // 路径规划
-        Path3D path = pathPlanner.planPath(currentPos, bestFrontier.centroid);
+        Path3D path = pathPlanner.planPath(currentPos, bestFrontier.centroid, octomap);
 
         if (!path.isValid || path.waypoints.empty()) {
             std::cout << "路径规划失败，标记为不可达" << std::endl;
-            frontierDetector.markGoalUnreachable(bestFrontier.centroid);
+            frontierDetector.addUnreachableGoal(bestFrontier.centroid);
             iteration++;
             continue;
         }
@@ -189,7 +192,7 @@ int main(int argc, char* argv[]) {
         waypointsVisited++;
 
         // 更新历史
-        frontierDetector.updateHistory(newPos);
+        frontierDetector.addVisitedGoal(newPos);
 
         iteration++;
     }
@@ -201,14 +204,14 @@ int main(int argc, char* argv[]) {
     std::cout << "访问路点: " << waypointsVisited << std::endl;
     std::cout << "总飞行距离: " << totalDistance << " m" << std::endl;
 
-    size_t occupied, free, unknown;
-    octomap.getMapStats(occupied, free, unknown);
-    std::cout << "最终地图 - 占用: " << occupied
-              << ", 空闲: " << free << std::endl;
+    auto finalStats = octomap.getStats();
+    std::cout << "最终地图 - 占用: " << finalStats.occupiedNodes
+              << ", 空闲: " << finalStats.freeNodes
+              << ", 内存: " << finalStats.memoryUsage << " MB" << std::endl;
 
     // 保存 OctoMap
     std::string outputFile = "exploration_result.bt";
-    if (octomap.saveMap(outputFile)) {
+    if (octomap.saveToFile(outputFile)) {
         std::cout << "\n地图已保存到: " << outputFile << std::endl;
         std::cout << "可以使用 octovis 查看: octovis " << outputFile << std::endl;
     }
