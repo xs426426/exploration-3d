@@ -138,7 +138,11 @@ private:
         ROS_INFO("Perceived %zu points", visibleCloud.points.size());
 
         if (visibleCloud.points.empty()) {
-            ROS_WARN("No points perceived, adjusting...");
+            // 旋转无人机寻找点云
+            double newYaw = currentYaw + M_PI / 4.0;  // 每次旋转45度
+            drone_.setTargetYaw(newYaw);
+            drone_.update(0.5);  // 更新状态
+            ROS_WARN("No points perceived, rotating to yaw=%.1f deg", newYaw * 180.0 / M_PI);
             iteration_++;
             return;
         }
