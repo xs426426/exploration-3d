@@ -74,14 +74,16 @@ public:
         Point3D minBound, maxBound;
         drone_.getEnvironmentBounds(minBound, maxBound);
 
+        ROS_INFO("Environment bounds: min(%.2f, %.2f, %.2f) max(%.2f, %.2f, %.2f)",
+                 minBound.x, minBound.y, minBound.z,
+                 maxBound.x, maxBound.y, maxBound.z);
+
+        // 起始位置在环境中心，Z轴取中间偏下位置
         Point3D startPos = {
             (minBound.x + maxBound.x) / 2.0,
             (minBound.y + maxBound.y) / 2.0,
-            minBound.z + 1.0
+            (minBound.z + maxBound.z) / 2.0  // 使用Z轴中间位置
         };
-        if (startPos.z > maxBound.z - 0.5) {
-            startPos.z = (minBound.z + maxBound.z) / 2.0;
-        }
         drone_.setInitialPose(startPos, 0.0);
 
         ROS_INFO("Start position: (%.2f, %.2f, %.2f)", startPos.x, startPos.y, startPos.z);

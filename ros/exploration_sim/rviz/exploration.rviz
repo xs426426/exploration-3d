@@ -19,8 +19,8 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 20
-      Reference Frame: <Fixed Frame>
+      Plane Cell Count: 50
+      Reference Frame: world
 
     - Class: rviz/TF
       Enabled: true
@@ -35,7 +35,6 @@ Visualization Manager:
       Radius: 0.05
       Reference Frame: world
 
-    # 无人机位姿
     - Alpha: 1
       Axes Length: 0.3
       Axes Radius: 0.05
@@ -50,13 +49,11 @@ Visualization Manager:
       Shape: Arrow
       Topic: /drone/pose
 
-    # 无人机 Marker
     - Class: rviz/Marker
       Enabled: true
       Name: Drone Marker
       Topic: /drone/marker
 
-    # 飞行轨迹
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -78,7 +75,6 @@ Visualization Manager:
       Shaft Length: 0.1
       Topic: /drone/trajectory
 
-    # 当前规划路径
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -89,7 +85,6 @@ Visualization Manager:
       Name: Current Path
       Topic: /drone/current_path
 
-    # OctoMap
     - Class: octomap_rviz_plugin/OccupancyGrid
       Enabled: true
       Name: OctoMap
@@ -98,14 +93,12 @@ Visualization Manager:
       Voxel Coloring: Z-Axis
       Voxel Rendering: Occupied Voxels
 
-    # 前沿点
     - Class: rviz/MarkerArray
       Enabled: true
       Name: Frontiers
       Topic: /frontiers
 
-    # 可见点云
-    - Alpha: 0.5
+    - Alpha: 1.0
       Autocompute Intensity Bounds: true
       Class: rviz/PointCloud2
       Color: 255; 255; 255
@@ -113,8 +106,8 @@ Visualization Manager:
       Enabled: true
       Name: Visible Cloud
       Position Transformer: XYZ
-      Size (Pixels): 2
-      Size (m): 0.02
+      Size (Pixels): 3
+      Size (m): 0.05
       Style: Points
       Topic: /visible_cloud
 
@@ -135,22 +128,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 15
+      Distance: 25
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 1
+        X: 10
+        Y: 5
+        Z: 2
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.5
-      Target Frame: <Fixed Frame>
+      Pitch: 0.7
+      Target Frame: world
       Value: Orbit (rviz)
       Yaw: 0.8
