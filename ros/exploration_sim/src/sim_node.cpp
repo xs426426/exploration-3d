@@ -138,11 +138,16 @@ private:
         ROS_INFO("Perceived %zu points", visibleCloud.points.size());
 
         if (visibleCloud.points.empty()) {
-            // 旋转无人机寻找点云
+            // 旋转无人机寻找点云 - 设置当前位置为目标以触发yaw更新
             double newYaw = currentYaw + M_PI / 4.0;  // 每次旋转45度
-            drone_.setTargetYaw(newYaw);
-            drone_.update(0.5);  // 更新状态
-            ROS_WARN("No points perceived, rotating to yaw=%.1f deg", newYaw * 180.0 / M_PI);
+            Point3D currentPosForRotation = currentPos;
+            currentPosForRotation.x += 0.01;  // 微小偏移触发移动
+            drone_.setTargetPosition(currentPosForRotation);
+            for (int i = 0; i < 10; i++) {
+                drone_.update(0.1);  // 更新状态让yaw改变
+            }
+            ROS_WARN("No points perceived, rotating to find points (yaw=%.1f deg)",
+                     drone_.getYaw() * 180.0 / M_PI);
             iteration_++;
             return;
         }
