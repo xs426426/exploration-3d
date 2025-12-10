@@ -22,23 +22,28 @@ sudo apt-get install -y \
     pkg-config
 
 # 安装 OctoMap
-echo "[3/6] 安装 OctoMap..."
+echo "[3/7] 安装 OctoMap..."
 sudo apt-get install -y \
     liboctomap-dev \
     octovis
 
+# 安装 PCL (Point Cloud Library)
+echo "[4/7] 安装 PCL..."
+sudo apt-get install -y \
+    libpcl-dev
+
 # 安装 Protobuf
-echo "[4/6] 安装 Protobuf..."
+echo "[5/7] 安装 Protobuf..."
 sudo apt-get install -y \
     protobuf-compiler \
     libprotobuf-dev
 
 # 安装 yaml-cpp
-echo "[5/6] 安装 yaml-cpp..."
+echo "[6/7] 安装 yaml-cpp..."
 sudo apt-get install -y libyaml-cpp-dev
 
 # 安装 Paho MQTT C++
-echo "[6/6] 安装 Paho MQTT..."
+echo "[7/7] 安装 Paho MQTT..."
 sudo apt-get install -y \
     libssl-dev
 

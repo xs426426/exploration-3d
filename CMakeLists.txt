@@ -33,6 +33,10 @@ message(STATUS "Found Paho MQTT C++")
 find_package(Eigen3 REQUIRED)
 message(STATUS "Found Eigen3: ${EIGEN3_INCLUDE_DIR}")
 
+# PCL (用于点云处理)
+find_package(PCL 1.10 REQUIRED COMPONENTS common io kdtree)
+message(STATUS "Found PCL: ${PCL_VERSION}")
+
 # yaml-cpp (用于配置文件)
 find_package(yaml-cpp REQUIRED)
 message(STATUS "Found yaml-cpp: ${YAML_CPP_VERSION}")
@@ -91,6 +95,7 @@ target_include_directories(exploration_3d PRIVATE
     ${OCTOMAP_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
     ${Protobuf_INCLUDE_DIRS}
+    ${PCL_INCLUDE_DIRS}
 )
 
 target_link_libraries(exploration_3d PRIVATE
@@ -99,10 +104,42 @@ target_link_libraries(exploration_3d PRIVATE
     PahoMqttCpp::paho-mqttpp3
     Eigen3::Eigen
     yaml-cpp
+    ${PCL_LIBRARIES}
 )
 
 if(OpenMP_CXX_FOUND)
     target_link_libraries(exploration_3d PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+# ============================================================
+# 仿真测试程序 (不依赖 MQTT)
+# ============================================================
+
+set(SIM_SOURCES
+    src/sim_test.cpp
+    src/mock_drone.cpp
+    src/octomap_manager.cpp
+    src/frontier_detector.cpp
+    src/path_planner.cpp
+)
+
+add_executable(sim_test ${SIM_SOURCES})
+
+target_include_directories(sim_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${OCTOMAP_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIR}
+    ${PCL_INCLUDE_DIRS}
+)
+
+target_link_libraries(sim_test PRIVATE
+    ${OCTOMAP_LIBRARIES}
+    Eigen3::Eigen
+    ${PCL_LIBRARIES}
+)
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(sim_test PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 # ============================================================
