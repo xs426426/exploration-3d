@@ -91,8 +91,8 @@ int main(int argc, char* argv[]) {
     // ========== 3. 初始化前沿点检测器和路径规划器 ==========
     ExplorationConfig config;
     config.resolution = resolution;
-    config.minFrontierSize = 5;
-    config.frontierClusterRadius = 0.5;
+    config.minClusterSize = 5;
+    config.clusterRadius = 0.5;
     config.astarMaxIterations = 50000;
     config.safetyMargin = 0.2;
 
