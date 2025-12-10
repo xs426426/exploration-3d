@@ -74,12 +74,22 @@ int main(int argc, char* argv[]) {
     Point3D minBound, maxBound;
     drone.getEnvironmentBounds(minBound, maxBound);
 
-    // 初始位置设在环境中心附近
+    std::cout << "环境边界: X[" << minBound.x << ", " << maxBound.x << "] "
+              << "Y[" << minBound.y << ", " << maxBound.y << "] "
+              << "Z[" << minBound.z << ", " << maxBound.z << "]" << std::endl;
+
+    // 初始位置设在环境中心，高度在 Z 范围中间偏下
     Point3D startPos = {
         (minBound.x + maxBound.x) / 2.0,
         (minBound.y + maxBound.y) / 2.0,
-        (minBound.z + maxBound.z) / 2.0 + 0.5  // 稍微高一点
+        minBound.z + 1.0  // 离地面 1 米
     };
+
+    // 确保初始位置在合理范围内
+    if (startPos.z > maxBound.z - 0.5) {
+        startPos.z = (minBound.z + maxBound.z) / 2.0;
+    }
+
     drone.setInitialPose(startPos, 0.0);
 
     // ========== 2. 初始化 OctoMap ==========
