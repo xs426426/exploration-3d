@@ -1,0 +1,45 @@
+# 3D 自主探索系统配置文件
+
+# 地图参数
+map:
+  resolution: 0.1          # 体素分辨率 (m)
+  min_height: 0.3          # 最小探索高度 (m)
+  max_height: 2.5          # 最大探索高度 (m)
+
+# 探索参数
+exploration:
+  max_distance: 10.0       # 最大探索距离 (m)
+  goal_tolerance: 0.5      # 目标到达容差 (m)
+  goal_timeout: 60.0       # 目标超时时间 (s)
+  update_rate: 10.0        # 更新频率 (Hz)
+  path_planning_mode: astar  # 路径规划模式: direct 或 astar
+
+# 前沿点检测参数
+frontier:
+  cluster_radius: 0.5      # 聚类半径 (m)
+  min_cluster_size: 5      # 最小簇大小
+
+# 评分权重
+scoring:
+  weight_info_gain: 1.0    # 信息增益权重
+  weight_distance: 0.5     # 距离权重
+  weight_consistency: 0.3  # 方向一致性权重
+
+# A*路径规划参数
+astar:
+  heuristic_weight: 1.0    # 启发式权重 (>=1 为加权A*)
+  max_iterations: 100000   # 最大迭代次数
+  simplify_tolerance: 0.2  # 路径简化容差 (m)
+
+# MQTT配置
+mqtt:
+  broker: "tcp://localhost:1883"
+  client_id: "exploration_3d"
+  topic_point_cloud: "drone/point_cloud"
+  topic_odometry: "drone/odometry"
+  topic_mission: "drone/mission"
+  topic_execution: "drone/execution"
+
+# 安全参数
+safety:
+  margin: 0.3              # 安全边距 (m)

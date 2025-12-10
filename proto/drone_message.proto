@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package daf;
+
+// ============================================================
+// 点云消息
+// ============================================================
+
+message PointXYZI {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+    float intensity = 4;
+}
+
+message PointCloud {
+    uint64 timestamp = 1;
+    repeated PointXYZI points = 2;
+}
+
+// ============================================================
+// 位姿消息
+// ============================================================
+
+message Position {
+    double x = 1;
+    double y = 2;
+    double z = 3;
+}
+
+message Quaternion {
+    double w = 1;
+    double x = 2;
+    double y = 3;
+    double z = 4;
+}
+
+message Pose {
+    Position position = 1;
+    Quaternion orientation = 2;
+}
+
+message Odometry {
+    uint64 timestamp = 1;
+    Pose pose = 2;
+    // 可选: 速度信息
+    Position linear_velocity = 3;
+    Position angular_velocity = 4;
+}
+
+// ============================================================
+// 任务消息
+// ============================================================
+
+message CameraParam {
+    bool on = 1;
+    int32 mode = 2;
+    int32 interval = 3;
+}
+
+message AutoPilot {
+    Position position = 1;
+    float yaw = 2;
+    CameraParam camera_param = 3;
+}
+
+message Task {
+    AutoPilot auto_pilot = 1;
+}
+
+message Mission {
+    string id = 1;
+    repeated Task tasks = 2;
+}
+
+// ============================================================
+// 任务执行消息
+// ============================================================
+
+message Execution {
+    string id = 1;
+    int32 action = 2;  // 0=START, 1=PAUSE, 2=RESUME, 3=STOP
+}
+
+// ============================================================
+// 状态消息
+// ============================================================
+
+message DroneStatus {
+    uint64 timestamp = 1;
+    Pose pose = 2;
+    float battery = 3;
+    int32 mode = 4;
+    bool armed = 5;
+}
