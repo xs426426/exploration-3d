@@ -53,11 +53,12 @@ Path3D PathPlanner::planPath(const Point3D& start, const Point3D& goal,
     CoordKey startKey = worldToGrid(start, resolution);
     CoordKey goalKey = worldToGrid(goal, resolution);
 
-    // 检查起点和终点
-    if (!isTraversable(startKey, octomapManager, resolution)) {
-        std::cerr << "[PathPlanner] 起点不可通行" << std::endl;
+    // 检查起点 - 只检查已知占据（无人机已经在那里了，未知没关系）
+    if (octomapManager.isOccupied(start, config_.safetyMargin)) {
+        std::cerr << "[PathPlanner] 起点在障碍物内" << std::endl;
         return result;
     }
+    // 检查终点 - 需要检查未知（不能飞到未知区域）
     if (!isTraversable(goalKey, octomapManager, resolution)) {
         std::cerr << "[PathPlanner] 终点不可通行" << std::endl;
         return result;

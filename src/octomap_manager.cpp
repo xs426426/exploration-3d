@@ -130,6 +130,37 @@ bool OctoMapManager::isInCollision(const Point3D& point, double safetyMargin) co
     return false;
 }
 
+bool OctoMapManager::isOccupied(const Point3D& point, double safetyMargin) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (safetyMargin <= 0) {
+        // 无安全边距，只检查单点
+        octomap::OcTreeNode* node = octree_->search(point.x, point.y, point.z);
+        // 只检查已知占据，未知视为可通行
+        return node != nullptr && octree_->isNodeOccupied(node);
+    }
+
+    // 有安全边距，检查球形区域
+    double step = resolution_;
+    for (double dx = -safetyMargin; dx <= safetyMargin; dx += step) {
+        for (double dy = -safetyMargin; dy <= safetyMargin; dy += step) {
+            for (double dz = -safetyMargin; dz <= safetyMargin; dz += step) {
+                double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+                if (dist > safetyMargin) continue;
+
+                octomap::OcTreeNode* node = octree_->search(
+                    point.x + dx, point.y + dy, point.z + dz);
+                // 只检查已知占据
+                if (node != nullptr && octree_->isNodeOccupied(node)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
 bool OctoMapManager::isPathClear(const Point3D& start, const Point3D& end,
                                   double stepSize, double safetyMargin) const {
     double dist = start.distanceTo(end);

@@ -54,8 +54,15 @@ public:
 
     /**
      * 检查点是否在障碍物内（考虑安全边距）
+     * 未知空间也视为障碍物
      */
     bool isInCollision(const Point3D& point, double safetyMargin = 0.0) const;
+
+    /**
+     * 检查点是否在已知占据障碍物内（忽略未知空间）
+     * 用于检查起点是否安全（无人机已经在那里了）
+     */
+    bool isOccupied(const Point3D& point, double safetyMargin = 0.0) const;
 
     /**
      * 检查两点之间的直线路径是否畅通
