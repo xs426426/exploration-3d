@@ -38,6 +38,7 @@ public:
         pubFrontiers_ = nh_.advertise<visualization_msgs::MarkerArray>("/frontiers", 10);
         pubEnvCloud_ = nh_.advertise<sensor_msgs::PointCloud2>("/environment", 1, true);  // latched
         pubVisibleCloud_ = nh_.advertise<sensor_msgs::PointCloud2>("/visible_cloud", 10);
+        pubAccumulatedCloud_ = nh_.advertise<sensor_msgs::PointCloud2>("/accumulated_cloud", 1, true);  // latched
         pubDroneMarker_ = nh_.advertise<visualization_msgs::Marker>("/drone/marker", 10);
 
         ROS_INFO("Exploration Sim Node initialized");
@@ -156,6 +157,9 @@ private:
         // 发布可见点云
         publishVisibleCloud(visibleCloud);
 
+        // 累积点云
+        accumulateCloud(visibleCloud);
+
         // 更新 OctoMap
         octomap_->insertPointCloud(visibleCloud, currentPos);
         publishOctomap();
@@ -171,21 +175,35 @@ private:
             return;
         }
 
-        // 选择最佳前沿点
-        const auto& bestFrontier = frontiers[0];
-        ROS_INFO("Target: (%.2f, %.2f, %.2f) score=%.2f",
-                 bestFrontier.centroid.x, bestFrontier.centroid.y,
-                 bestFrontier.centroid.z, bestFrontier.score);
+        // 尝试找到可达的前沿点
+        Path3D path;
+        int selectedIdx = -1;
+        for (size_t i = 0; i < frontiers.size() && i < 5; ++i) {  // 最多尝试前5个
+            const auto& frontier = frontiers[i];
+            ROS_INFO("Trying frontier %zu: (%.2f, %.2f, %.2f) score=%.2f",
+                     i, frontier.centroid.x, frontier.centroid.y,
+                     frontier.centroid.z, frontier.score);
 
-        // 路径规划
-        Path3D path = pathPlanner_->planPath(currentPos, bestFrontier.centroid, *octomap_);
+            path = pathPlanner_->planPath(currentPos, frontier.centroid, *octomap_);
+            if (path.isValid && !path.waypoints.empty()) {
+                selectedIdx = i;
+                break;
+            } else {
+                ROS_WARN("Frontier %zu unreachable, trying next...", i);
+                frontierDetector_->addUnreachableGoal(frontier.centroid);
+            }
+        }
 
-        if (!path.isValid || path.waypoints.empty()) {
-            ROS_WARN("Path planning failed, marking as unreachable");
-            frontierDetector_->addUnreachableGoal(bestFrontier.centroid);
+        if (selectedIdx < 0) {
+            ROS_WARN("All top frontiers unreachable, skipping iteration");
             iteration_++;
             return;
         }
+
+        const auto& bestFrontier = frontiers[selectedIdx];
+        ROS_INFO("Selected frontier %d: (%.2f, %.2f, %.2f)",
+                 selectedIdx, bestFrontier.centroid.x, bestFrontier.centroid.y,
+                 bestFrontier.centroid.z);
 
         ROS_INFO("Planned path: %zu waypoints, length=%.2fm",
                  path.waypoints.size(), path.totalLength);
@@ -402,6 +420,22 @@ private:
                  cloud.points.size(), msg.width, msg.height);
     }
 
+    void accumulateCloud(const PointCloud& cloud) {
+        // 添加新点到累积点云
+        for (const auto& pt : cloud.points) {
+            accumulatedCloud_.push_back(pcl::PointXYZ(pt.x, pt.y, pt.z));
+        }
+
+        // 发布累积点云
+        sensor_msgs::PointCloud2 msg;
+        pcl::toROSMsg(accumulatedCloud_, msg);
+        msg.header.stamp = ros::Time::now();
+        msg.header.frame_id = "world";
+        pubAccumulatedCloud_.publish(msg);
+
+        ROS_INFO("Accumulated cloud: %zu total points", accumulatedCloud_.size());
+    }
+
 private:
     ros::NodeHandle nh_, pnh_;
 
@@ -419,6 +453,7 @@ private:
     ros::Publisher pubFrontiers_;
     ros::Publisher pubEnvCloud_;
     ros::Publisher pubVisibleCloud_;
+    ros::Publisher pubAccumulatedCloud_;
     ros::Publisher pubDroneMarker_;
 
     // TF
@@ -434,6 +469,7 @@ private:
     int iteration_;
     bool running_;
     nav_msgs::Path trajectory_;
+    pcl::PointCloud<pcl::PointXYZ> accumulatedCloud_;  // 累积点云
 };
 
 int main(int argc, char** argv) {
