@@ -128,6 +128,10 @@ public:
         ROS_INFO("RViz connected! Starting exploration in 3 seconds...");
         ros::Duration(3.0).sleep();
 
+        // ========== 初始 360 度旋转扫描 ==========
+        // 目的：在无人机周围建立"安全气泡"，避免被未知空间包围
+        performInitialScan();
+
         ros::Rate rate(simRate_);
 
         while (ros::ok() && running_ && iteration_ < maxIterations_) {
@@ -137,6 +141,63 @@ public:
         }
 
         ROS_INFO("Exploration finished! Iterations: %d", iteration_);
+    }
+
+    void performInitialScan() {
+        ROS_INFO("===========================================");
+        ROS_INFO("Performing initial 360-degree scan...");
+        ROS_INFO("Building safe bubble around drone");
+        ROS_INFO("===========================================");
+
+        Point3D currentPos = drone_.getPosition();
+        double startYaw = drone_.getYaw();
+        int numScans = 8;  // 每45度扫描一次，共8次
+        double yawStep = 2.0 * M_PI / numScans;
+
+        for (int i = 0; i < numScans; i++) {
+            double targetYaw = startYaw + i * yawStep;
+
+            // 设置无人机朝向（通过设置一个该方向的目标点）
+            Point3D targetPos(
+                currentPos.x + 0.01 * std::cos(targetYaw),
+                currentPos.y + 0.01 * std::sin(targetYaw),
+                currentPos.z
+            );
+            drone_.setTargetPosition(targetPos);
+
+            // 更新无人机状态让它转向
+            for (int j = 0; j < 20; j++) {
+                drone_.update(0.05);
+            }
+
+            // 感知并建图
+            PointCloud visibleCloud = drone_.perceive();
+
+            if (!visibleCloud.points.empty()) {
+                accumulateCloud(visibleCloud);
+                octomap_->insertPointCloud(visibleCloud, currentPos);
+
+                ROS_INFO("Initial scan %d/%d: yaw=%.0f deg, perceived %zu points",
+                         i + 1, numScans, targetYaw * 180.0 / M_PI, visibleCloud.points.size());
+            } else {
+                ROS_WARN("Initial scan %d/%d: no points (yaw=%.0f deg)",
+                         i + 1, numScans, targetYaw * 180.0 / M_PI);
+            }
+
+            // 发布位姿和地图
+            publishDronePose(currentPos, targetYaw);
+            publishDroneMarker(currentPos, targetYaw);
+            broadcastTF(currentPos, targetYaw);
+            publishOctomap();
+
+            ros::spinOnce();
+            ros::Duration(0.2).sleep();  // 给 RViz 时间显示
+        }
+
+        ROS_INFO("===========================================");
+        ROS_INFO("Initial scan complete! Safe bubble created.");
+        ROS_INFO("Accumulated %zu points in initial scan", accumulatedCloud_.size());
+        ROS_INFO("===========================================");
     }
 
 private:
