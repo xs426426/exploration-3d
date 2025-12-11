@@ -137,7 +137,7 @@ Visualization Manager:
       Focal Point:
         X: 8.8
         Y: 0.3
-        Z: 0
+        Z: 1.5
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05
       Invert Z Axis: false

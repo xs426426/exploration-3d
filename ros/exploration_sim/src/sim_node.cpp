@@ -78,11 +78,12 @@ public:
                  minBound.x, minBound.y, minBound.z,
                  maxBound.x, maxBound.y, maxBound.z);
 
-        // 起始位置在环境中心，Z轴设置在较低位置（大部分点云在地面附近）
+        // 起始位置在环境中心，Z轴设置在地面上方
+        // 注意：点云实际Z值从约0开始，但边界可能有异常值
         Point3D startPos = {
             (minBound.x + maxBound.x) / 2.0,
             (minBound.y + maxBound.y) / 2.0,
-            minBound.z + 1.5  // 离地面1.5米高度
+            1.5  // 直接设为1.5米高度（点云地面约为Z=0）
         };
         drone_.setInitialPose(startPos, 0.0);
 
