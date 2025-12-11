@@ -101,15 +101,25 @@ Visualization Manager:
     - Alpha: 1.0
       Autocompute Intensity Bounds: true
       Class: rviz/PointCloud2
-      Color: 255; 255; 255
+      Color: 255; 0; 0
       Color Transformer: FlatColor
+      Decay Time: 0
       Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
       Name: Visible Cloud
       Position Transformer: XYZ
-      Size (Pixels): 3
-      Size (m): 0.05
-      Style: Points
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 5
+      Size (m): 0.1
+      Style: Spheres
       Topic: /visible_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
 
   Global Options:
     Background Color: 48; 48; 48

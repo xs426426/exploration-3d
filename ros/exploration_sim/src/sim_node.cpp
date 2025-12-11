@@ -375,17 +375,31 @@ private:
 
     void publishVisibleCloud(const PointCloud& cloud) {
         pcl::PointCloud<pcl::PointXYZ> pclCloud;
+        pclCloud.header.frame_id = "world";
+
         for (const auto& pt : cloud.points) {
             pclCloud.push_back(pcl::PointXYZ(pt.x, pt.y, pt.z));
+        }
+
+        // 打印前几个点的坐标用于调试
+        if (!cloud.points.empty()) {
+            ROS_INFO("First point: (%.2f, %.2f, %.2f)",
+                     cloud.points[0].x, cloud.points[0].y, cloud.points[0].z);
         }
 
         sensor_msgs::PointCloud2 msg;
         pcl::toROSMsg(pclCloud, msg);
         msg.header.stamp = ros::Time::now();
         msg.header.frame_id = "world";
+
+        // 确保消息有效
+        msg.is_dense = true;
+        msg.is_bigendian = false;
+
         pubVisibleCloud_.publish(msg);
 
-        ROS_INFO_THROTTLE(2.0, "Published visible cloud: %zu points", cloud.points.size());
+        ROS_INFO("Published visible cloud: %zu points, width=%d, height=%d",
+                 cloud.points.size(), msg.width, msg.height);
     }
 
 private:
