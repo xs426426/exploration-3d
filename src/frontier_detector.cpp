@@ -161,13 +161,21 @@ double FrontierDetector::calculateScore(
 {
     double score = 0.0;
 
+    // 0. 距离过滤：太近的前沿点直接给低分
+    double distance = cluster.centroid.distanceTo(currentPos);
+    if (distance < 0.5) {  // 小于0.5米的前沿点忽略
+        return -1000.0;
+    }
+
     // 1. 信息增益
     score += config_.weightInfoGain * cluster.infoGain;
 
-    // 2. 距离成本（越近越好）
-    double distance = cluster.centroid.distanceTo(currentPos);
-    double distanceCost = 1.0 / (1.0 + distance);
-    score += config_.weightDistance * distanceCost;
+    // 2. 距离成本（适中距离最好，太近太远都不好）
+    // 最佳距离在 2-5 米
+    double optimalDist = 3.0;
+    double distScore = 1.0 - std::abs(distance - optimalDist) / optimalDist;
+    distScore = std::max(0.0, distScore);
+    score += config_.weightDistance * distScore;
 
     // 3. 方向一致性（如果有上一个方向）
     if (lastDirection != nullptr) {
