@@ -27,6 +27,17 @@ public:
                     const OctoMapManager& octomapManager);
 
     /**
+     * 为前沿点找到最近的可达观察点
+     * 前沿点在未知空间边界，需要找一个在已知空闲空间的观察点
+     * @param frontier 前沿点位置
+     * @param currentPos 当前位置
+     * @param octomapManager OctoMap管理器
+     * @return 观察点（无效则返回原点）
+     */
+    Point3D findObservationPoint(const Point3D& frontier, const Point3D& currentPos,
+                                  const OctoMapManager& octomapManager) const;
+
+    /**
      * 检查直线路径是否可通行
      */
     bool isDirectPathClear(const Point3D& start, const Point3D& goal,

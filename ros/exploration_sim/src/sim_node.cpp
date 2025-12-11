@@ -200,9 +200,23 @@ private:
                      i, frontier.centroid.x, frontier.centroid.y,
                      frontier.centroid.z, frontier.score);
 
-            path = pathPlanner_->planPath(currentPos, frontier.centroid, *octomap_);
+            // 先找到前沿点附近的可达观察点
+            Point3D observationPoint = pathPlanner_->findObservationPoint(
+                frontier.centroid, currentPos, *octomap_);
+
+            // 检查观察点是否有效
+            if (observationPoint.x == 0 && observationPoint.y == 0 && observationPoint.z == 0) {
+                ROS_WARN("Frontier %zu: no valid observation point found", i);
+                frontierDetector_->addUnreachableGoal(frontier.centroid);
+                continue;
+            }
+
+            // 规划到观察点的路径
+            path = pathPlanner_->planPath(currentPos, observationPoint, *octomap_);
             if (path.isValid && !path.waypoints.empty()) {
                 selectedIdx = i;
+                ROS_INFO("Found path to observation point (%.2f, %.2f, %.2f)",
+                         observationPoint.x, observationPoint.y, observationPoint.z);
                 break;
             } else {
                 ROS_WARN("Frontier %zu unreachable, trying next...", i);
