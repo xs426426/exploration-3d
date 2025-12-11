@@ -197,17 +197,26 @@ double FrontierDetector::calculateScore(
     // 0. 距离过滤：太近的前沿点直接给低分
     double distance = cluster.centroid.distanceTo(currentPos);
     if (distance < 0.5) {  // 小于0.5米的前沿点忽略
-        return -1000.0;
+        return 0.1;  // 给一个很小的正分，而不是负分
     }
 
-    // 1. 信息增益
-    score += config_.weightInfoGain * cluster.infoGain;
+    // 1. 信息增益（基础分，确保始终为正）
+    // 归一化到 [0.5, 1.5] 范围
+    double normalizedInfoGain = 0.5 + cluster.infoGain;
+    score += config_.weightInfoGain * normalizedInfoGain;
 
-    // 2. 距离成本（适中距离最好，太近太远都不好）
-    // 最佳距离在 2-5 米
-    double optimalDist = 3.0;
-    double distScore = 1.0 - std::abs(distance - optimalDist) / optimalDist;
-    distScore = std::max(0.0, distScore);
+    // 2. 距离成本（使用归一化的距离评分，确保为正）
+    // 最佳距离在 2-5 米，太近太远都降低分数但不变为负
+    double optimalDist = 3.5;
+    double maxDist = config_.maxExplorationDistance;
+    double distScore;
+    if (distance < optimalDist) {
+        // 太近：距离越近分数越低（但仍为正）
+        distScore = 0.3 + 0.7 * (distance / optimalDist);
+    } else {
+        // 太远：距离越远分数越低（但仍为正）
+        distScore = std::max(0.1, 1.0 - (distance - optimalDist) / (maxDist - optimalDist) * 0.9);
+    }
     score += config_.weightDistance * distScore;
 
     // 3. 方向一致性（如果有上一个方向）
@@ -232,14 +241,22 @@ double FrontierDetector::calculateScore(
                                    dy * lastDirection->y / lastNorm +
                                    dz * lastDirection->z / lastNorm;
 
-                // 方向一致性奖励 [-1, 1] -> [0, 1]
-                double consistency = (dotProduct + 1.0) / 2.0;
+                // 方向一致性奖励 [-1, 1] -> [0.2, 1.0]
+                double consistency = 0.2 + (dotProduct + 1.0) / 2.0 * 0.8;
                 score += config_.weightConsistency * consistency;
             }
         }
+    } else {
+        // 没有上一个方向时给予中等分数
+        score += config_.weightConsistency * 0.5;
     }
 
-    return score;
+    // 4. 簇大小奖励（大簇优先）
+    double sizeBonus = std::min(cluster.size / 50.0, 0.5);  // 最多加0.5分
+    score += sizeBonus;
+
+    // 确保最终分数为正
+    return std::max(score, 0.1);
 }
 
 void FrontierDetector::addVisitedGoal(const Point3D& goal) {

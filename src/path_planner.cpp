@@ -266,57 +266,159 @@ Point3D PathPlanner::findObservationPoint(const Point3D& frontier, const Point3D
                                            const OctoMapManager& octomapManager) const {
     double resolution = octomapManager.getResolution();
 
-    // 从当前位置向前沿点方向搜索
-    Eigen::Vector3d dir = frontier.toEigen() - currentPos.toEigen();
-    double totalDist = dir.norm();
+    // 从当前位置向前沿点方向的基础向量
+    Eigen::Vector3d baseDir = frontier.toEigen() - currentPos.toEigen();
+    double totalDist = baseDir.norm();
 
     if (totalDist < 0.01) {
         return Point3D(0, 0, 0);  // 无效
     }
 
-    dir.normalize();
+    baseDir.normalize();
 
-    // 搜索步长
-    double searchStep = resolution * 2;
+    // ============================================================
+    // 多点采样策略：围绕前沿点在不同角度和距离上采样
+    // ============================================================
 
-    // 策略：找到一个距离前沿点适当距离的观察点
-    // 目标：在前沿点前方约1-2米处（传感器能覆盖到的位置）
-    double observeDist = std::min(totalDist - 1.0, totalDist * 0.7);  // 距离前沿点约1米或总距离的70%
-    observeDist = std::max(0.5, observeDist);  // 至少移动0.5米
+    struct CandidatePoint {
+        Point3D point;
+        double score;      // 评分：距离+可见性
+        double distToFrontier;
+    };
 
-    // 从当前位置向前沿点方向搜索，找到一个没有已知障碍物的点
-    // 使用 isOccupied 而不是 isInCollision，允许穿越未知空间
-    Point3D bestPoint(0, 0, 0);
-    bool foundValid = false;
+    std::vector<CandidatePoint> candidates;
 
-    for (double d = searchStep; d <= observeDist; d += searchStep) {
+    // 采样参数
+    double minObserveDist = 1.0;   // 最小观察距离（距离前沿点）
+    double maxObserveDist = 3.0;   // 最大观察距离
+    double distStep = 0.5;         // 距离步长
+    int numAngles = 8;             // 水平方向采样角度数
+    double angleStep = 2.0 * M_PI / numAngles;
+
+    // 计算两个垂直于baseDir的基向量，用于生成采样圆
+    Eigen::Vector3d up(0, 0, 1);
+    Eigen::Vector3d perpX = baseDir.cross(up);
+    if (perpX.norm() < 0.01) {
+        perpX = Eigen::Vector3d(1, 0, 0);
+    }
+    perpX.normalize();
+    Eigen::Vector3d perpY = baseDir.cross(perpX);
+    perpY.normalize();
+
+    // 方案1：沿着当前位置到前沿点的直线方向采样
+    for (double d = 0.5; d <= totalDist * 0.8; d += distStep) {
         Point3D candidate(
-            currentPos.x + dir.x() * d,
-            currentPos.y + dir.y() * d,
-            currentPos.z + dir.z() * d
+            currentPos.x + baseDir.x() * d,
+            currentPos.y + baseDir.y() * d,
+            currentPos.z + baseDir.z() * d
         );
 
-        // 只检查已知障碍物，允许穿越未知空间
+        // 检查候选点是否安全（无已知障碍物）
         if (!octomapManager.isOccupied(candidate, config_.safetyMargin)) {
-            bestPoint = candidate;
-            foundValid = true;
-        } else {
-            // 遇到已知障碍物，停止
-            std::cout << "[PathPlanner] 遇到障碍物于距离 " << d << "m" << std::endl;
-            break;
+            double distToFrontier = candidate.distanceTo(frontier);
+            double distToCurrent = candidate.distanceTo(currentPos);
+
+            // 评分：优先选择离前沿点适中距离、离当前位置近的点
+            double score = 10.0;  // 基础分
+            score -= 0.5 * distToCurrent;  // 距离当前位置越近越好
+            score -= std::abs(distToFrontier - 2.0) * 0.3;  // 距离前沿点2米左右最好
+
+            candidates.push_back({candidate, score, distToFrontier});
         }
     }
 
-    if (foundValid && bestPoint.distanceTo(currentPos) > 0.3) {
-        std::cout << "[PathPlanner] 找到观察点: (" << bestPoint.x << ", "
-                  << bestPoint.y << ", " << bestPoint.z
-                  << ") 距当前位置 " << currentPos.distanceTo(bestPoint) << "m" << std::endl;
-        return bestPoint;
+    // 方案2：围绕前沿点采样（多角度）
+    for (double dist = minObserveDist; dist <= maxObserveDist; dist += distStep) {
+        for (int i = 0; i < numAngles; ++i) {
+            double angle = i * angleStep;
+
+            // 从前沿点向外偏移
+            Eigen::Vector3d offset = -baseDir * dist;  // 先沿反方向
+            // 加上一些侧向偏移
+            offset += perpX * (dist * 0.3 * std::cos(angle));
+            offset += perpY * (dist * 0.3 * std::sin(angle));
+
+            Point3D candidate(
+                frontier.x + offset.x(),
+                frontier.y + offset.y(),
+                frontier.z + offset.z()
+            );
+
+            // 高度限制
+            if (candidate.z < config_.minHeight || candidate.z > config_.maxHeight) {
+                continue;
+            }
+
+            // 检查候选点是否安全
+            if (!octomapManager.isOccupied(candidate, config_.safetyMargin)) {
+                double distToCurrent = candidate.distanceTo(currentPos);
+                double distToFrontier = candidate.distanceTo(frontier);
+
+                // 检查从候选点到前沿点的视线是否清晰
+                bool hasGoodView = octomapManager.isPathClearIgnoreUnknown(
+                    candidate, frontier, resolution, 0.0);
+
+                double score = 5.0;  // 基础分（比直线方案低）
+                score -= 0.3 * distToCurrent;  // 距离当前位置
+                if (hasGoodView) {
+                    score += 3.0;  // 有良好视野加分
+                }
+
+                candidates.push_back({candidate, score, distToFrontier});
+            }
+        }
     }
 
-    // 如果直线方向没找到足够远的点，返回当前位置（原地观察）
+    // 方案3：在当前位置附近采样（如果上述方案都失败）
+    for (double dx = -1.0; dx <= 1.0; dx += 0.5) {
+        for (double dy = -1.0; dy <= 1.0; dy += 0.5) {
+            if (std::abs(dx) < 0.1 && std::abs(dy) < 0.1) continue;
+
+            Point3D candidate(
+                currentPos.x + dx,
+                currentPos.y + dy,
+                currentPos.z
+            );
+
+            if (!octomapManager.isOccupied(candidate, config_.safetyMargin)) {
+                double distToFrontier = candidate.distanceTo(frontier);
+
+                // 检查是否比当前位置更靠近前沿点
+                if (distToFrontier < totalDist - 0.3) {
+                    double score = 2.0;  // 低优先级
+                    score -= distToFrontier * 0.1;
+
+                    candidates.push_back({candidate, score, distToFrontier});
+                }
+            }
+        }
+    }
+
+    // 选择最佳候选点
+    if (!candidates.empty()) {
+        // 按评分排序
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const CandidatePoint& a, const CandidatePoint& b) {
+                      return a.score > b.score;
+                  });
+
+        const auto& best = candidates[0];
+
+        // 确保候选点距离当前位置足够远（避免微小移动）
+        if (best.point.distanceTo(currentPos) > 0.3) {
+            std::cout << "[PathPlanner] 找到观察点: (" << best.point.x << ", "
+                      << best.point.y << ", " << best.point.z
+                      << ") 距当前位置 " << currentPos.distanceTo(best.point)
+                      << "m, 距前沿点 " << best.distToFrontier
+                      << "m, 评分=" << best.score
+                      << " (共" << candidates.size() << "个候选点)" << std::endl;
+            return best.point;
+        }
+    }
+
+    // 如果所有候选点都太近，返回当前位置（原地观察）
     if (!octomapManager.isOccupied(currentPos, config_.safetyMargin)) {
-        std::cout << "[PathPlanner] 使用当前位置作为观察点（原地观察）" << std::endl;
+        std::cout << "[PathPlanner] 无有效候选点，使用当前位置作为观察点（原地观察）" << std::endl;
         return currentPos;
     }
 

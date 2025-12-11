@@ -96,11 +96,16 @@ public:
         // 初始化探索组件
         ExplorationConfig config;
         config.resolution = resolution_;
-        config.minClusterSize = 5;
-        config.clusterRadius = 0.5;
+        config.minClusterSize = 10;        // 增大最小簇大小，过滤噪声（原5）
+        config.clusterRadius = 0.8;        // 增大聚类半径（原0.5）
         config.astarMaxIterations = 50000;
-        config.safetyMargin = 0.2;
+        config.safetyMargin = 0.15;        // 减小安全边距，允许更激进的路径（原0.2）
         config.maxExplorationDistance = 30.0;  // 增大探索距离以覆盖整个环境
+
+        // 调整评分权重，避免负分
+        config.weightInfoGain = 1.0;       // 增大信息增益权重（原0.5）
+        config.weightDistance = 0.2;       // 减小距离权重（原0.3）
+        config.weightConsistency = 0.3;    // 增大一致性权重（原0.2）
 
         frontierDetector_ = std::make_unique<FrontierDetector>(config);
         pathPlanner_ = std::make_unique<PathPlanner>(config);
@@ -294,8 +299,27 @@ private:
             // 检查是否是原地观察（观察点就是当前位置）
             double distToObs = currentPos.distanceTo(observationPoint);
             if (distToObs < 0.1) {
+                // 原地观察前先检查是否有良好视野
+                // 使用射线检测判断前沿点是否可见
+                bool hasGoodView = octomap_->isPathClearIgnoreUnknown(
+                    currentPos, frontier.centroid, resolution_, 0.0);
+
+                if (!hasGoodView) {
+                    // 视野被遮挡，跳过这个前沿点
+                    ROS_WARN("Frontier %zu: view blocked, skipping in-place observation", i);
+                    frontierDetector_->addVisitedGoal(frontier.centroid);
+                    continue;
+                }
+
+                // 检查该前沿点的簇大小，太小的不值得原地观察
+                if (frontier.size < 15) {
+                    ROS_WARN("Frontier %zu: cluster too small (%.0f), skipping", i, frontier.size);
+                    frontierDetector_->addVisitedGoal(frontier.centroid);
+                    continue;
+                }
+
                 // 原地观察：不需要路径规划，直接旋转朝向前沿点
-                ROS_INFO("Observe in place - turning towards frontier %zu", i);
+                ROS_INFO("Observe in place - turning towards frontier %zu (size=%.0f)", i, frontier.size);
                 double targetYaw = std::atan2(
                     frontier.centroid.y - currentPos.y,
                     frontier.centroid.x - currentPos.x);
