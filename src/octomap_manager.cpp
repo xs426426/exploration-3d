@@ -105,7 +105,8 @@ bool OctoMapManager::isInCollision(const Point3D& point, double safetyMargin) co
     if (safetyMargin <= 0) {
         // 无安全边距，只检查单点
         octomap::OcTreeNode* node = octree_->search(point.x, point.y, point.z);
-        return node != nullptr && octree_->isNodeOccupied(node);
+        // 未知或占据都视为碰撞
+        return node == nullptr || octree_->isNodeOccupied(node);
     }
 
     // 有安全边距，检查球形区域
@@ -118,7 +119,8 @@ bool OctoMapManager::isInCollision(const Point3D& point, double safetyMargin) co
 
                 octomap::OcTreeNode* node = octree_->search(
                     point.x + dx, point.y + dy, point.z + dz);
-                if (node != nullptr && octree_->isNodeOccupied(node)) {
+                // 未知或占据都视为碰撞
+                if (node == nullptr || octree_->isNodeOccupied(node)) {
                     return true;
                 }
             }

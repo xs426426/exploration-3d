@@ -227,14 +227,18 @@ private:
         // 发布当前规划路径
         publishCurrentPath(path);
 
-        // 模拟飞行
+        // 模拟飞行 - 边飞边感知
         double simDt = 0.1;
+        int perceiveInterval = 10;  // 每10步感知一次
+        int stepCounter = 0;
+
         for (const auto& waypoint : path.waypoints) {
             drone_.setTargetPosition(waypoint);
             int simSteps = 0;
             while (!drone_.hasReachedTarget() && simSteps < 100) {
                 drone_.update(simDt);
                 simSteps++;
+                stepCounter++;
 
                 // 更新可视化
                 Point3D pos = drone_.getPosition();
@@ -251,6 +255,15 @@ private:
                 pose.pose.position.y = pos.y;
                 pose.pose.position.z = pos.z;
                 trajectory_.poses.push_back(pose);
+
+                // 边飞边感知 - 定期更新地图
+                if (stepCounter % perceiveInterval == 0) {
+                    PointCloud midCloud = drone_.perceive();
+                    if (!midCloud.points.empty()) {
+                        accumulateCloud(midCloud);
+                        octomap_->insertPointCloud(midCloud, pos);
+                    }
+                }
             }
         }
 
