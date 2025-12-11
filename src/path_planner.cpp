@@ -264,55 +264,52 @@ Point3D PathPlanner::findObservationPoint(const Point3D& frontier, const Point3D
                                            const OctoMapManager& octomapManager) const {
     double resolution = octomapManager.getResolution();
 
-    // 从前沿点向当前位置方向搜索，找到第一个已知空闲点
-    Eigen::Vector3d dir = currentPos.toEigen() - frontier.toEigen();
-    double dist = dir.norm();
+    // 从当前位置向前沿点方向搜索，找到最后一个已知空闲点
+    // （即：从已知区域向未知区域走，找到边界处的安全观察点）
+    Eigen::Vector3d dir = frontier.toEigen() - currentPos.toEigen();
+    double totalDist = dir.norm();
 
-    if (dist < 0.01) {
+    if (totalDist < 0.01) {
         return Point3D(0, 0, 0);  // 无效
     }
 
     dir.normalize();
 
     // 沿着方向搜索，步长为分辨率
-    double searchStep = resolution;
-    double maxSearchDist = 3.0;  // 最多搜索3米
+    double searchStep = resolution * 2;  // 稍大的步长加速搜索
+    Point3D lastValidPoint(0, 0, 0);
+    bool foundValid = false;
 
-    for (double d = searchStep; d <= maxSearchDist; d += searchStep) {
+    // 从当前位置出发，向前沿点方向走，记录最后一个可通行点
+    for (double d = searchStep; d <= totalDist; d += searchStep) {
         Point3D candidate(
-            frontier.x + dir.x() * d,
-            frontier.y + dir.y() * d,
-            frontier.z + dir.z() * d
+            currentPos.x + dir.x() * d,
+            currentPos.y + dir.y() * d,
+            currentPos.z + dir.z() * d
         );
 
         // 检查该点是否在已知空闲空间（不在碰撞中）
         if (!octomapManager.isInCollision(candidate, config_.safetyMargin)) {
-            std::cout << "[PathPlanner] 找到观察点: (" << candidate.x << ", "
-                      << candidate.y << ", " << candidate.z
-                      << ") 距前沿 " << d << "m" << std::endl;
-            return candidate;
+            lastValidPoint = candidate;
+            foundValid = true;
+        } else {
+            // 遇到障碍或未知，停止搜索
+            break;
         }
     }
 
-    // 如果直线方向没找到，尝试球面搜索
-    double searchRadius = 1.0;  // 搜索半径
-    for (double r = searchStep; r <= searchRadius; r += searchStep) {
-        // 在球面上采样
-        for (double theta = 0; theta < M_PI; theta += M_PI / 6) {
-            for (double phi = 0; phi < 2 * M_PI; phi += M_PI / 6) {
-                Point3D candidate(
-                    frontier.x + r * std::sin(theta) * std::cos(phi),
-                    frontier.y + r * std::sin(theta) * std::sin(phi),
-                    frontier.z + r * std::cos(theta)
-                );
+    if (foundValid) {
+        std::cout << "[PathPlanner] 找到观察点: (" << lastValidPoint.x << ", "
+                  << lastValidPoint.y << ", " << lastValidPoint.z
+                  << ") 距当前位置 " << currentPos.distanceTo(lastValidPoint) << "m" << std::endl;
+        return lastValidPoint;
+    }
 
-                if (!octomapManager.isInCollision(candidate, config_.safetyMargin)) {
-                    std::cout << "[PathPlanner] 球面搜索找到观察点: (" << candidate.x << ", "
-                              << candidate.y << ", " << candidate.z << ")" << std::endl;
-                    return candidate;
-                }
-            }
-        }
+    // 如果直线方向没找到（可能当前位置就被未知包围），尝试在当前位置附近找
+    // 这种情况下，返回当前位置作为"原地观察"
+    if (!octomapManager.isOccupied(currentPos, config_.safetyMargin)) {
+        std::cout << "[PathPlanner] 使用当前位置作为观察点（原地观察）" << std::endl;
+        return currentPos;
     }
 
     std::cerr << "[PathPlanner] 无法为前沿点找到观察点" << std::endl;
