@@ -209,7 +209,15 @@ PointCloud MockDrone::extractVisiblePoints() {
     std::vector<float> distances;
 
     // 搜索最大感知距离内的所有点
-    kdtree_.radiusSearch(searchPoint, sensorConfig_.maxRange, indices, distances);
+    int numFound = kdtree_.radiusSearch(searchPoint, sensorConfig_.maxRange, indices, distances);
+
+    // 调试信息
+    static int debugCount = 0;
+    if (debugCount++ < 5) {
+        std::cout << "[MockDrone] perceive() - Drone at (" << dronePos.x << ", " << dronePos.y << ", " << dronePos.z
+                  << "), yaw=" << droneYaw * 180.0 / M_PI << "°" << std::endl;
+        std::cout << "[MockDrone] radiusSearch(range=" << sensorConfig_.maxRange << ") found " << numFound << " points" << std::endl;
+    }
 
     // 视锥体参数
     double halfHFov = sensorConfig_.horizontalFov * M_PI / 360.0;  // 半角
