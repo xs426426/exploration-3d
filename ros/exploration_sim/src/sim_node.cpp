@@ -163,8 +163,10 @@ public:
             // 直接设置目标yaw角（不依赖位置偏移）
             drone_.setTargetYaw(targetYaw);
 
-            // 更新无人机状态让它转向 (增加更新次数确保转到位)
-            for (int j = 0; j < 50; j++) {
+            // 更新无人机状态让它转向
+            // maxYawRate=45度/s, dt=0.05s, 每步转2.25度
+            // 45度需要20步，用100步确保转到位
+            for (int j = 0; j < 100; j++) {
                 drone_.update(0.05);
             }
 
