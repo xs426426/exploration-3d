@@ -221,13 +221,16 @@ private:
         ROS_INFO("Perceived %zu points", visibleCloud.points.size());
 
         if (visibleCloud.points.empty()) {
-            // 旋转无人机寻找点云 - 设置当前位置为目标以触发yaw更新
+            // 旋转无人机寻找点云 - 直接设置目标yaw角
             double newYaw = currentYaw + M_PI / 4.0;  // 每次旋转45度
-            Point3D currentPosForRotation = currentPos;
-            currentPosForRotation.x += 0.01;  // 微小偏移触发移动
-            drone_.setTargetPosition(currentPosForRotation);
-            for (int i = 0; i < 10; i++) {
-                drone_.update(0.1);  // 更新状态让yaw改变
+            // 归一化到 [-PI, PI]
+            while (newYaw > M_PI) newYaw -= 2.0 * M_PI;
+            while (newYaw < -M_PI) newYaw += 2.0 * M_PI;
+
+            drone_.setTargetYaw(newYaw);
+            // 等待旋转完成 (45度需要约20步, 用50步确保转到位)
+            for (int i = 0; i < 50; i++) {
+                drone_.update(0.05);
             }
             ROS_WARN("No points perceived, rotating to find points (yaw=%.1f deg)",
                      drone_.getYaw() * 180.0 / M_PI);
@@ -274,6 +277,28 @@ private:
                 ROS_WARN("Frontier %zu: no valid observation point found", i);
                 frontierDetector_->addUnreachableGoal(frontier.centroid);
                 continue;
+            }
+
+            // 检查是否是原地观察（观察点就是当前位置）
+            double distToObs = currentPos.distanceTo(observationPoint);
+            if (distToObs < 0.1) {
+                // 原地观察：不需要路径规划，直接旋转朝向前沿点
+                ROS_INFO("Observe in place - turning towards frontier");
+                double targetYaw = std::atan2(
+                    frontier.centroid.y - currentPos.y,
+                    frontier.centroid.x - currentPos.x);
+                drone_.setTargetYaw(targetYaw);
+                // 等待旋转完成
+                for (int j = 0; j < 50; j++) {
+                    drone_.update(0.05);
+                }
+                // 创建一个只有当前位置的"路径"
+                path.waypoints.clear();
+                path.waypoints.push_back(currentPos);
+                path.isValid = true;
+                path.totalLength = 0;
+                selectedIdx = i;
+                break;
             }
 
             // 规划到观察点的路径
