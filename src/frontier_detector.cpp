@@ -44,21 +44,47 @@ std::vector<FrontierCluster> FrontierDetector::detectFrontiers(
         config_.clusterRadius,
         config_.minClusterSize);
 
-    // 4. 计算评分并排序
+    // 4. 过滤已访问和不可达的前沿簇
+    std::vector<FrontierCluster> validClusters;
     for (auto& cluster : clusters) {
-        cluster.score = calculateScore(cluster, currentPos, nullptr);
+        // 检查是否在不可达列表中
+        if (isUnreachable(cluster.centroid, 0.5)) {
+            continue;
+        }
+
+        // 检查是否在已访问列表中（使用较小的阈值）
+        bool visited = false;
+        for (const auto& visitedGoal : visitedGoals_) {
+            if (cluster.centroid.distanceTo(visitedGoal) < 0.5) {
+                visited = true;
+                break;
+            }
+        }
+        if (visited) {
+            continue;
+        }
+
+        validClusters.push_back(cluster);
     }
 
-    std::sort(clusters.begin(), clusters.end(),
+    // 5. 计算评分并排序
+    for (auto& cluster : validClusters) {
+        cluster.score = calculateScore(cluster, currentPos, nullptr);
+        // 应用历史惩罚
+        cluster.score -= config_.weightDistance * calculateHistoryPenalty(cluster.centroid);
+    }
+
+    std::sort(validClusters.begin(), validClusters.end(),
               [](const FrontierCluster& a, const FrontierCluster& b) {
                   return a.score > b.score;
               });
 
-    std::cout << "[FrontierDetector] 检测到 " << clusters.size()
+    std::cout << "[FrontierDetector] 检测到 " << validClusters.size()
               << " 个前沿簇 (原始体素: " << frontierCells.size()
-              << ", 过滤后: " << filteredCells.size() << ")" << std::endl;
+              << ", 过滤后: " << filteredCells.size()
+              << ", 排除已访问/不可达: " << (clusters.size() - validClusters.size()) << ")" << std::endl;
 
-    return clusters;
+    return validClusters;
 }
 
 std::vector<FrontierCluster> FrontierDetector::clusterFrontiers(
