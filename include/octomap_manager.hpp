@@ -65,10 +65,17 @@ public:
     bool isOccupied(const Point3D& point, double safetyMargin = 0.0) const;
 
     /**
-     * 检查两点之间的直线路径是否畅通
+     * 检查两点之间的直线路径是否畅通（未知空间视为障碍）
      */
     bool isPathClear(const Point3D& start, const Point3D& end,
                      double stepSize = 0.1, double safetyMargin = 0.0) const;
+
+    /**
+     * 检查两点之间的直线路径是否畅通（忽略未知空间，只检查已知障碍物）
+     * 用于探索时允许穿越未知区域
+     */
+    bool isPathClearIgnoreUnknown(const Point3D& start, const Point3D& end,
+                                   double stepSize = 0.1, double safetyMargin = 0.0) const;
 
     /**
      * 获取点周围的障碍物密度

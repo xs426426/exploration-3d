@@ -184,6 +184,30 @@ bool OctoMapManager::isPathClear(const Point3D& start, const Point3D& end,
     return true;
 }
 
+bool OctoMapManager::isPathClearIgnoreUnknown(const Point3D& start, const Point3D& end,
+                                              double stepSize, double safetyMargin) const {
+    double dist = start.distanceTo(end);
+    if (dist < stepSize) {
+        return !isOccupied(end, safetyMargin);
+    }
+
+    int steps = static_cast<int>(dist / stepSize) + 1;
+    for (int i = 0; i <= steps; ++i) {
+        double t = static_cast<double>(i) / steps;
+        Point3D p;
+        p.x = start.x + t * (end.x - start.x);
+        p.y = start.y + t * (end.y - start.y);
+        p.z = start.z + t * (end.z - start.z);
+
+        // 只检查已知障碍物，允许穿越未知空间
+        if (isOccupied(p, safetyMargin)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 double OctoMapManager::getObstacleDensity(const Point3D& center, double radius) const {
     std::lock_guard<std::mutex> lock(mutex_);
 

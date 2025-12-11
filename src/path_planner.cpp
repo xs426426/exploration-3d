@@ -39,7 +39,7 @@ Path3D PathPlanner::planPath(const Point3D& start, const Point3D& goal,
 
     double resolution = octomapManager.getResolution();
 
-    // 首先检查直线路径
+    // 首先检查直线路径（只检查已知障碍物，允许穿越未知）
     if (isDirectPathClear(start, goal, octomapManager)) {
         result.waypoints.push_back(start);
         result.waypoints.push_back(goal);
@@ -53,14 +53,14 @@ Path3D PathPlanner::planPath(const Point3D& start, const Point3D& goal,
     CoordKey startKey = worldToGrid(start, resolution);
     CoordKey goalKey = worldToGrid(goal, resolution);
 
-    // 检查起点 - 只检查已知占据（无人机已经在那里了，未知没关系）
+    // 检查起点 - 只检查已知占据（无人机已经在那里了）
     if (octomapManager.isOccupied(start, config_.safetyMargin)) {
         std::cerr << "[PathPlanner] 起点在障碍物内" << std::endl;
         return result;
     }
-    // 检查终点 - 需要检查未知（不能飞到未知区域）
-    if (!isTraversable(goalKey, octomapManager, resolution)) {
-        std::cerr << "[PathPlanner] 终点不可通行" << std::endl;
+    // 检查终点 - 也只检查已知占据（允许飞向未知区域探索）
+    if (octomapManager.isOccupied(goal, config_.safetyMargin)) {
+        std::cerr << "[PathPlanner] 终点在障碍物内" << std::endl;
         return result;
     }
 
@@ -182,9 +182,10 @@ Path3D PathPlanner::planPath(const Point3D& start, const Point3D& goal,
 
 bool PathPlanner::isDirectPathClear(const Point3D& start, const Point3D& goal,
                                      const OctoMapManager& octomapManager) const {
-    return octomapManager.isPathClear(start, goal,
-                                       octomapManager.getResolution(),
-                                       config_.safetyMargin);
+    // 使用 isPathClearIgnoreUnknown 允许穿越未知空间进行探索
+    return octomapManager.isPathClearIgnoreUnknown(start, goal,
+                                                    octomapManager.getResolution(),
+                                                    config_.safetyMargin);
 }
 
 Path3D PathPlanner::simplifyPath(const Path3D& path,
@@ -257,15 +258,15 @@ double PathPlanner::heuristic(const CoordKey& a, const CoordKey& b, double resol
 bool PathPlanner::isTraversable(const CoordKey& coord, const OctoMapManager& octomapManager,
                                  double resolution) const {
     Point3D p = gridToWorld(coord, resolution);
-    return !octomapManager.isInCollision(p, config_.safetyMargin);
+    // 只检查已知障碍物，允许穿越未知空间进行探索
+    return !octomapManager.isOccupied(p, config_.safetyMargin);
 }
 
 Point3D PathPlanner::findObservationPoint(const Point3D& frontier, const Point3D& currentPos,
                                            const OctoMapManager& octomapManager) const {
     double resolution = octomapManager.getResolution();
 
-    // 从当前位置向前沿点方向搜索，找到最后一个已知空闲点
-    // （即：从已知区域向未知区域走，找到边界处的安全观察点）
+    // 从当前位置向前沿点方向搜索
     Eigen::Vector3d dir = frontier.toEigen() - currentPos.toEigen();
     double totalDist = dir.norm();
 
@@ -275,38 +276,45 @@ Point3D PathPlanner::findObservationPoint(const Point3D& frontier, const Point3D
 
     dir.normalize();
 
-    // 沿着方向搜索，步长为分辨率
-    double searchStep = resolution * 2;  // 稍大的步长加速搜索
-    Point3D lastValidPoint(0, 0, 0);
+    // 搜索步长
+    double searchStep = resolution * 2;
+
+    // 策略：找到一个距离前沿点适当距离的观察点
+    // 目标：在前沿点前方约1-2米处（传感器能覆盖到的位置）
+    double observeDist = std::min(totalDist - 1.0, totalDist * 0.7);  // 距离前沿点约1米或总距离的70%
+    observeDist = std::max(0.5, observeDist);  // 至少移动0.5米
+
+    // 从当前位置向前沿点方向搜索，找到一个没有已知障碍物的点
+    // 使用 isOccupied 而不是 isInCollision，允许穿越未知空间
+    Point3D bestPoint(0, 0, 0);
     bool foundValid = false;
 
-    // 从当前位置出发，向前沿点方向走，记录最后一个可通行点
-    for (double d = searchStep; d <= totalDist; d += searchStep) {
+    for (double d = searchStep; d <= observeDist; d += searchStep) {
         Point3D candidate(
             currentPos.x + dir.x() * d,
             currentPos.y + dir.y() * d,
             currentPos.z + dir.z() * d
         );
 
-        // 检查该点是否在已知空闲空间（不在碰撞中）
-        if (!octomapManager.isInCollision(candidate, config_.safetyMargin)) {
-            lastValidPoint = candidate;
+        // 只检查已知障碍物，允许穿越未知空间
+        if (!octomapManager.isOccupied(candidate, config_.safetyMargin)) {
+            bestPoint = candidate;
             foundValid = true;
         } else {
-            // 遇到障碍或未知，停止搜索
+            // 遇到已知障碍物，停止
+            std::cout << "[PathPlanner] 遇到障碍物于距离 " << d << "m" << std::endl;
             break;
         }
     }
 
-    if (foundValid) {
-        std::cout << "[PathPlanner] 找到观察点: (" << lastValidPoint.x << ", "
-                  << lastValidPoint.y << ", " << lastValidPoint.z
-                  << ") 距当前位置 " << currentPos.distanceTo(lastValidPoint) << "m" << std::endl;
-        return lastValidPoint;
+    if (foundValid && bestPoint.distanceTo(currentPos) > 0.3) {
+        std::cout << "[PathPlanner] 找到观察点: (" << bestPoint.x << ", "
+                  << bestPoint.y << ", " << bestPoint.z
+                  << ") 距当前位置 " << currentPos.distanceTo(bestPoint) << "m" << std::endl;
+        return bestPoint;
     }
 
-    // 如果直线方向没找到（可能当前位置就被未知包围），尝试在当前位置附近找
-    // 这种情况下，返回当前位置作为"原地观察"
+    // 如果直线方向没找到足够远的点，返回当前位置（原地观察）
     if (!octomapManager.isOccupied(currentPos, config_.safetyMargin)) {
         std::cout << "[PathPlanner] 使用当前位置作为观察点（原地观察）" << std::endl;
         return currentPos;
