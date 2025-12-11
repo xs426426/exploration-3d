@@ -96,16 +96,18 @@ public:
         // 初始化探索组件
         ExplorationConfig config;
         config.resolution = resolution_;
-        config.minClusterSize = 10;        // 增大最小簇大小，过滤噪声（原5）
-        config.clusterRadius = 0.8;        // 增大聚类半径（原0.5）
+        config.minClusterSize = 5;         // 降低最小簇大小，检测边缘小区域（原10）
+        config.clusterRadius = 0.8;        // 聚类半径
         config.astarMaxIterations = 50000;
-        config.safetyMargin = 0.15;        // 减小安全边距，允许更激进的路径（原0.2）
-        config.maxExplorationDistance = 30.0;  // 增大探索距离以覆盖整个环境
+        config.safetyMargin = 0.15;        // 减小安全边距，允许更激进的路径
+        config.maxExplorationDistance = 50.0;  // 增大探索距离，确保覆盖整个环境（原30）
+        config.minHeight = 0.3;            // 降低最小高度限制（原0.5）
+        config.maxHeight = 4.0;            // 增大最大高度限制（原3.0）
 
-        // 调整评分权重，避免负分
-        config.weightInfoGain = 1.0;       // 增大信息增益权重（原0.5）
-        config.weightDistance = 0.2;       // 减小距离权重（原0.3）
-        config.weightConsistency = 0.3;    // 增大一致性权重（原0.2）
+        // 调整评分权重
+        config.weightInfoGain = 1.0;       // 信息增益权重
+        config.weightDistance = 0.15;      // 降低距离权重，允许飞向远处（原0.2）
+        config.weightConsistency = 0.2;    // 降低一致性权重，鼓励探索新方向（原0.3）
 
         frontierDetector_ = std::make_unique<FrontierDetector>(config);
         pathPlanner_ = std::make_unique<PathPlanner>(config);
