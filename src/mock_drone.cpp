@@ -111,6 +111,17 @@ void MockDrone::setTargetYaw(double yaw) {
 void MockDrone::update(double dt) {
     std::lock_guard<std::mutex> lock(stateMutex_);
 
+    // 始终更新偏航角 (平滑转向) - 即使没有位置目标也要更新yaw
+    double yawError = normalizeAngle(targetYaw_ - state_.yaw);
+    double maxYawChange = kinematicsConfig_.maxYawRate * M_PI / 180.0 * dt;
+    if (std::abs(yawError) > maxYawChange) {
+        state_.yaw += (yawError > 0 ? maxYawChange : -maxYawChange);
+    } else {
+        state_.yaw = targetYaw_;
+    }
+    state_.yaw = normalizeAngle(state_.yaw);
+
+    // 如果没有位置目标，只更新yaw后返回
     if (!hasTarget_) {
         state_.isMoving = false;
         return;
@@ -142,16 +153,6 @@ void MockDrone::update(double dt) {
     state_.position.y += vy * dt;
     state_.position.z += vz * dt;
     state_.velocity = {vx, vy, vz};
-
-    // 更新偏航角 (平滑转向)
-    double yawError = normalizeAngle(targetYaw_ - state_.yaw);
-    double maxYawChange = kinematicsConfig_.maxYawRate * M_PI / 180.0 * dt;
-    if (std::abs(yawError) > maxYawChange) {
-        state_.yaw += (yawError > 0 ? maxYawChange : -maxYawChange);
-    } else {
-        state_.yaw = targetYaw_;
-    }
-    state_.yaw = normalizeAngle(state_.yaw);
 }
 
 bool MockDrone::hasReachedTarget() const {

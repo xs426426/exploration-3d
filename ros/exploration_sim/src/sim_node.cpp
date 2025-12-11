@@ -156,19 +156,20 @@ public:
 
         for (int i = 0; i < numScans; i++) {
             double targetYaw = startYaw + i * yawStep;
+            // 归一化到 [-PI, PI]
+            while (targetYaw > M_PI) targetYaw -= 2.0 * M_PI;
+            while (targetYaw < -M_PI) targetYaw += 2.0 * M_PI;
 
-            // 设置无人机朝向（通过设置一个该方向的目标点）
-            Point3D targetPos(
-                currentPos.x + 0.01 * std::cos(targetYaw),
-                currentPos.y + 0.01 * std::sin(targetYaw),
-                currentPos.z
-            );
-            drone_.setTargetPosition(targetPos);
+            // 直接设置目标yaw角（不依赖位置偏移）
+            drone_.setTargetYaw(targetYaw);
 
-            // 更新无人机状态让它转向
-            for (int j = 0; j < 20; j++) {
+            // 更新无人机状态让它转向 (增加更新次数确保转到位)
+            for (int j = 0; j < 50; j++) {
                 drone_.update(0.05);
             }
+
+            // 获取实际yaw角用于日志
+            double actualYaw = drone_.getYaw();
 
             // 感知并建图
             PointCloud visibleCloud = drone_.perceive();
@@ -177,21 +178,22 @@ public:
                 accumulateCloud(visibleCloud);
                 octomap_->insertPointCloud(visibleCloud, currentPos);
 
-                ROS_INFO("Initial scan %d/%d: yaw=%.0f deg, perceived %zu points",
-                         i + 1, numScans, targetYaw * 180.0 / M_PI, visibleCloud.points.size());
+                ROS_INFO("Initial scan %d/%d: target_yaw=%.0f deg, actual_yaw=%.0f deg, perceived %zu points",
+                         i + 1, numScans, targetYaw * 180.0 / M_PI, actualYaw * 180.0 / M_PI,
+                         visibleCloud.points.size());
             } else {
-                ROS_WARN("Initial scan %d/%d: no points (yaw=%.0f deg)",
-                         i + 1, numScans, targetYaw * 180.0 / M_PI);
+                ROS_WARN("Initial scan %d/%d: no points (target_yaw=%.0f deg, actual_yaw=%.0f deg)",
+                         i + 1, numScans, targetYaw * 180.0 / M_PI, actualYaw * 180.0 / M_PI);
             }
 
-            // 发布位姿和地图
-            publishDronePose(currentPos, targetYaw);
-            publishDroneMarker(currentPos, targetYaw);
-            broadcastTF(currentPos, targetYaw);
+            // 发布位姿和地图 - 使用实际yaw
+            publishDronePose(currentPos, actualYaw);
+            publishDroneMarker(currentPos, actualYaw);
+            broadcastTF(currentPos, actualYaw);
             publishOctomap();
 
             ros::spinOnce();
-            ros::Duration(0.2).sleep();  // 给 RViz 时间显示
+            ros::Duration(0.3).sleep();  // 给 RViz 更多时间显示
         }
 
         ROS_INFO("===========================================");
