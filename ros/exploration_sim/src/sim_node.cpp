@@ -112,6 +112,22 @@ public:
     }
 
     void spin() {
+        // 等待 RViz 连接
+        ROS_INFO("===========================================");
+        ROS_INFO("Waiting for RViz to connect...");
+        ROS_INFO("Please start RViz with: export LIBGL_ALWAYS_SOFTWARE=1 && rosrun rviz rviz");
+        ROS_INFO("===========================================");
+
+        ros::Rate waitRate(2.0);
+        while (ros::ok() && pubAccumulatedCloud_.getNumSubscribers() == 0) {
+            ros::spinOnce();
+            ROS_INFO_THROTTLE(5.0, "Waiting for RViz subscriber... (Press Ctrl+C to skip)");
+            waitRate.sleep();
+        }
+
+        ROS_INFO("RViz connected! Starting exploration in 3 seconds...");
+        ros::Duration(3.0).sleep();
+
         ros::Rate rate(simRate_);
 
         while (ros::ok() && running_ && iteration_ < maxIterations_) {
