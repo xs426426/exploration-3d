@@ -31,14 +31,14 @@ public:
         pnh_.param<double>("sim_rate", simRate_, 2.0);  // 2 Hz 仿真速度
 
         // 发布者
-        pubDronePose_ = nh_.advertise<geometry_msgs::PoseStamped>("/drone/pose", 1);
-        pubTrajectory_ = nh_.advertise<nav_msgs::Path>("/drone/trajectory", 1);
-        pubCurrentPath_ = nh_.advertise<nav_msgs::Path>("/drone/current_path", 1);
-        pubOctomap_ = nh_.advertise<octomap_msgs::Octomap>("/octomap", 1);
-        pubFrontiers_ = nh_.advertise<visualization_msgs::MarkerArray>("/frontiers", 1);
+        pubDronePose_ = nh_.advertise<geometry_msgs::PoseStamped>("/drone/pose", 10);
+        pubTrajectory_ = nh_.advertise<nav_msgs::Path>("/drone/trajectory", 10);
+        pubCurrentPath_ = nh_.advertise<nav_msgs::Path>("/drone/current_path", 10);
+        pubOctomap_ = nh_.advertise<octomap_msgs::Octomap>("/octomap", 10);
+        pubFrontiers_ = nh_.advertise<visualization_msgs::MarkerArray>("/frontiers", 10);
         pubEnvCloud_ = nh_.advertise<sensor_msgs::PointCloud2>("/environment", 1, true);  // latched
-        pubVisibleCloud_ = nh_.advertise<sensor_msgs::PointCloud2>("/visible_cloud", 1);
-        pubDroneMarker_ = nh_.advertise<visualization_msgs::Marker>("/drone/marker", 1);
+        pubVisibleCloud_ = nh_.advertise<sensor_msgs::PointCloud2>("/visible_cloud", 10);
+        pubDroneMarker_ = nh_.advertise<visualization_msgs::Marker>("/drone/marker", 10);
 
         ROS_INFO("Exploration Sim Node initialized");
     }
@@ -384,6 +384,8 @@ private:
         msg.header.stamp = ros::Time::now();
         msg.header.frame_id = "world";
         pubVisibleCloud_.publish(msg);
+
+        ROS_INFO_THROTTLE(2.0, "Published visible cloud: %zu points", cloud.points.size());
     }
 
 private:
