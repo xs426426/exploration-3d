@@ -72,6 +72,8 @@ std::vector<FrontierCluster> FrontierDetector::detectFrontiers(
         cluster.score = calculateScore(cluster, currentPos, nullptr);
         // 应用历史惩罚
         cluster.score -= config_.weightDistance * calculateHistoryPenalty(cluster.centroid);
+        // 应用轨迹重复惩罚（新增）
+        cluster.score -= 0.5 * calculateTrajectoryPenalty(cluster.centroid);
     }
 
     std::sort(validClusters.begin(), validClusters.end(),
@@ -82,7 +84,12 @@ std::vector<FrontierCluster> FrontierDetector::detectFrontiers(
     std::cout << "[FrontierDetector] 检测到 " << validClusters.size()
               << " 个前沿簇 (原始体素: " << frontierCells.size()
               << ", 过滤后: " << filteredCells.size()
-              << ", 排除已访问/不可达: " << (clusters.size() - validClusters.size()) << ")" << std::endl;
+              << ", 排除已访问/不可达: " << (clusters.size() - validClusters.size()) << ")";
+
+    if (boundsSet_) {
+        std::cout << " 覆盖率: " << (explorationCoverage_ * 100.0) << "%";
+    }
+    std::cout << std::endl;
 
     return validClusters;
 }
@@ -265,14 +272,99 @@ bool FrontierDetector::isUnreachable(const Point3D& point, double threshold) con
 double FrontierDetector::calculateHistoryPenalty(const Point3D& point) const {
     double penalty = 0.0;
 
+    // 对已访问目标的惩罚（增大范围和力度）
     for (const auto& visited : visitedGoals_) {
         double dist = point.distanceTo(visited);
-        if (dist < 2.0) {
-            penalty += 0.5 * (1.0 - dist / 2.0);
+        if (dist < 3.0) {  // 增大惩罚范围到3米
+            penalty += 0.8 * (1.0 - dist / 3.0);  // 增大惩罚力度
         }
     }
 
     return penalty;
+}
+
+double FrontierDetector::calculateTrajectoryPenalty(const Point3D& point) const {
+    double penalty = 0.0;
+
+    // 对轨迹历史的惩罚（避免重复走过的路径）
+    for (const auto& trajPoint : trajectoryHistory_) {
+        double dist = point.distanceTo(trajPoint);
+        if (dist < 1.5) {  // 1.5米范围内的轨迹点
+            penalty += 0.3 * (1.0 - dist / 1.5);
+        }
+    }
+
+    // 使用网格查询进行快速惩罚
+    int64_t gridKey = pointToGridKey(point, trajectoryGridSize_);
+    if (visitedGridCells_.find(gridKey) != visitedGridCells_.end()) {
+        penalty += 0.5;  // 已访问过的网格额外惩罚
+    }
+
+    return std::min(penalty, 2.0);  // 限制最大惩罚
+}
+
+void FrontierDetector::recordTrajectoryPoint(const Point3D& point) {
+    // 检查是否与最近的轨迹点距离足够远
+    if (!trajectoryHistory_.empty()) {
+        double dist = point.distanceTo(trajectoryHistory_.back());
+        if (dist < trajectoryGridSize_ * 0.5) {
+            return;  // 太近了，不记录
+        }
+    }
+
+    trajectoryHistory_.push_back(point);
+
+    // 记录到网格
+    int64_t gridKey = pointToGridKey(point, trajectoryGridSize_);
+    visitedGridCells_.insert(gridKey);
+
+    // 限制轨迹历史长度（保留最近的1000个点）
+    if (trajectoryHistory_.size() > 1000) {
+        trajectoryHistory_.erase(trajectoryHistory_.begin());
+    }
+}
+
+void FrontierDetector::clearTrajectoryHistory() {
+    trajectoryHistory_.clear();
+    visitedGridCells_.clear();
+}
+
+void FrontierDetector::setEnvironmentBounds(const Point3D& minBound, const Point3D& maxBound) {
+    envMinBound_ = minBound;
+    envMaxBound_ = maxBound;
+    boundsSet_ = true;
+    std::cout << "[FrontierDetector] 环境边界设置: ("
+              << minBound.x << ", " << minBound.y << ", " << minBound.z << ") - ("
+              << maxBound.x << ", " << maxBound.y << ", " << maxBound.z << ")" << std::endl;
+}
+
+void FrontierDetector::updateCoverage(const OctoMapManager& octomapManager) {
+    if (!boundsSet_) return;
+
+    // 获取已探索体积
+    double exploredVolume = octomapManager.getExploredVolume();
+
+    // 计算环境总体积（考虑高度限制）
+    double envWidth = envMaxBound_.x - envMinBound_.x;
+    double envDepth = envMaxBound_.y - envMinBound_.y;
+    double envHeight = std::min(envMaxBound_.z, config_.maxHeight) -
+                       std::max(envMinBound_.z, config_.minHeight);
+    envHeight = std::max(envHeight, 0.1);  // 避免除零
+
+    double totalVolume = envWidth * envDepth * envHeight;
+
+    if (totalVolume > 0) {
+        explorationCoverage_ = std::min(exploredVolume / totalVolume, 1.0);
+    }
+}
+
+int64_t FrontierDetector::pointToGridKey(const Point3D& point, double gridSize) const {
+    int64_t gx = static_cast<int64_t>(std::floor(point.x / gridSize));
+    int64_t gy = static_cast<int64_t>(std::floor(point.y / gridSize));
+    int64_t gz = static_cast<int64_t>(std::floor(point.z / gridSize));
+
+    // 组合成唯一键值（假设坐标范围在 ±1000 米内）
+    return (gx + 10000) * 100000000LL + (gy + 10000) * 10000LL + (gz + 10000);
 }
 
 }  // namespace exploration

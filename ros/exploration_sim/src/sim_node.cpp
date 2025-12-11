@@ -100,9 +100,13 @@ public:
         config.clusterRadius = 0.5;
         config.astarMaxIterations = 50000;
         config.safetyMargin = 0.2;
+        config.maxExplorationDistance = 30.0;  // 增大探索距离以覆盖整个环境
 
         frontierDetector_ = std::make_unique<FrontierDetector>(config);
         pathPlanner_ = std::make_unique<PathPlanner>(config);
+
+        // 设置环境边界（用于覆盖率计算）
+        frontierDetector_->setEnvironmentBounds(minBound, maxBound);
 
         // 初始化轨迹
         trajectory_.header.frame_id = "world";
@@ -211,6 +215,9 @@ private:
         Point3D currentPos = drone_.getPosition();
         double currentYaw = drone_.getYaw();
 
+        // 记录当前位置到轨迹
+        frontierDetector_->recordTrajectoryPoint(currentPos);
+
         // 发布无人机位姿
         publishDronePose(currentPos, currentYaw);
         publishDroneMarker(currentPos, currentYaw);
@@ -248,13 +255,18 @@ private:
         octomap_->insertPointCloud(visibleCloud, currentPos);
         publishOctomap();
 
+        // 更新覆盖率
+        frontierDetector_->updateCoverage(*octomap_);
+        double coverage = frontierDetector_->getExplorationCoverage();
+        ROS_INFO("Exploration coverage: %.1f%%", coverage * 100.0);
+
         // 检测前沿点
         auto frontiers = frontierDetector_->detectFrontiers(*octomap_, currentPos);
         ROS_INFO("Detected %zu frontier clusters", frontiers.size());
         publishFrontiers(frontiers);
 
         if (frontiers.empty()) {
-            ROS_INFO("Exploration complete! No more frontiers.");
+            ROS_INFO("Exploration complete! No more frontiers. Coverage: %.1f%%", coverage * 100.0);
             running_ = false;
             return;
         }
@@ -365,6 +377,9 @@ private:
                 publishDronePose(pos, yaw);
                 publishDroneMarker(pos, yaw);
                 broadcastTF(pos, yaw);
+
+                // 记录轨迹点
+                frontierDetector_->recordTrajectoryPoint(pos);
 
                 // 添加到轨迹
                 geometry_msgs::PoseStamped pose;

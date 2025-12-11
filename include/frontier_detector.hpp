@@ -4,6 +4,7 @@
 #include "octomap_manager.hpp"
 #include <vector>
 #include <memory>
+#include <unordered_set>
 
 namespace exploration {
 
@@ -49,12 +50,54 @@ public:
     void addUnreachableGoal(const Point3D& goal);
     void clearUnreachableGoals();
 
+    /**
+     * 记录无人机轨迹点（用于避免路径重复）
+     */
+    void recordTrajectoryPoint(const Point3D& point);
+
+    /**
+     * 清除轨迹历史
+     */
+    void clearTrajectoryHistory();
+
+    /**
+     * 设置环境边界（用于覆盖率计算）
+     */
+    void setEnvironmentBounds(const Point3D& minBound, const Point3D& maxBound);
+
+    /**
+     * 更新覆盖率
+     */
+    void updateCoverage(const OctoMapManager& octomapManager);
+
+    /**
+     * 获取探索覆盖率
+     */
+    double getExplorationCoverage() const { return explorationCoverage_; }
+
+    /**
+     * 检查是否在黑名单中
+     */
+    bool isUnreachable(const Point3D& point, double threshold = 2.0) const;
+
 private:
     ExplorationConfig config_;
 
     // 历史记录
     std::vector<Point3D> visitedGoals_;
     std::vector<Point3D> unreachableGoals_;
+    std::vector<Point3D> trajectoryHistory_;           // 轨迹历史
+    std::unordered_set<int64_t> visitedGridCells_;     // 已访问的网格单元（快速查询）
+
+    // 环境边界
+    Point3D envMinBound_, envMaxBound_;
+    bool boundsSet_ = false;
+
+    // 覆盖率
+    double explorationCoverage_ = 0.0;
+
+    // 轨迹记录间隔（米）
+    static constexpr double trajectoryGridSize_ = 0.5;
 
     /**
      * 对前沿点进行聚类
@@ -73,14 +116,19 @@ private:
         const Point3D* lastDirection);
 
     /**
-     * 检查是否在黑名单中
-     */
-    bool isUnreachable(const Point3D& point, double threshold = 2.0) const;
-
-    /**
      * 计算历史惩罚
      */
     double calculateHistoryPenalty(const Point3D& point) const;
+
+    /**
+     * 计算轨迹重复惩罚（避免重复走过的路径）
+     */
+    double calculateTrajectoryPenalty(const Point3D& point) const;
+
+    /**
+     * 将3D坐标转换为网格键值（用于去重）
+     */
+    int64_t pointToGridKey(const Point3D& point, double gridSize) const;
 };
 
 }  // namespace exploration
