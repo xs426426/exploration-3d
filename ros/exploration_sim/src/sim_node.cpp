@@ -283,7 +283,7 @@ private:
             double distToObs = currentPos.distanceTo(observationPoint);
             if (distToObs < 0.1) {
                 // 原地观察：不需要路径规划，直接旋转朝向前沿点
-                ROS_INFO("Observe in place - turning towards frontier");
+                ROS_INFO("Observe in place - turning towards frontier %zu", i);
                 double targetYaw = std::atan2(
                     frontier.centroid.y - currentPos.y,
                     frontier.centroid.x - currentPos.x);
@@ -292,13 +292,28 @@ private:
                 for (int j = 0; j < 50; j++) {
                     drone_.update(0.05);
                 }
-                // 创建一个只有当前位置的"路径"
-                path.waypoints.clear();
-                path.waypoints.push_back(currentPos);
-                path.isValid = true;
-                path.totalLength = 0;
-                selectedIdx = i;
-                break;
+
+                // 原地观察后感知
+                Point3D pos = drone_.getPosition();
+                double yaw = drone_.getYaw();
+                publishDronePose(pos, yaw);
+                publishDroneMarker(pos, yaw);
+                broadcastTF(pos, yaw);
+
+                PointCloud observeCloud = drone_.perceive();
+                if (!observeCloud.points.empty()) {
+                    ROS_INFO("Observed %zu points from in-place rotation", observeCloud.points.size());
+                    accumulateCloud(observeCloud);
+                    octomap_->insertPointCloud(observeCloud, pos);
+                    publishOctomap();
+                }
+
+                // 标记该前沿点为已访问，避免重复选择
+                frontierDetector_->addVisitedGoal(frontier.centroid);
+                ROS_INFO("Marked frontier as visited after in-place observation");
+
+                // 继续尝试下一个前沿点，而不是选择这个
+                continue;
             }
 
             // 规划到观察点的路径
